@@ -203,4 +203,58 @@ RSpec.describe 'Filtering' do
       expect(last_cmd_stdout).to match(/2 examples, 0 failures/)
     end
   end
+
+  context "when `config.example_status_persistence_file_path` is configured" do
+    context "to an invalid file path (e.g. spec/spec_helper.rb/examples.txt)" do
+      before do
+        write_file_formatted "spec/1_spec.rb", "
+          RSpec.configure do |c|
+            c.example_status_persistence_file_path = 'spec/1_spec.rb/examples.txt'
+          end
+          RSpec.describe { example { } }
+        "
+      end
+
+      it 'emits a helpful warning to the user, and still runs the spec suite' do
+        run_command "spec/1_spec.rb"
+
+        expect(last_cmd_stderr).to include(
+          "WARNING: Could not write",
+          "spec/1_spec.rb/examples.txt",
+          "config.example_status_persistence_file_path",
+          "Errno:"
+        )
+        expect(last_cmd_stdout).to include("1 example")
+      end
+    end
+
+    context "to a file path for which we lack permissions" do
+      before do
+        write_file_formatted "spec/1_spec.rb", "
+          RSpec.configure do |c|
+            c.example_status_persistence_file_path = 'spec/examples.txt'
+          end
+          RSpec.describe { example { } }
+        "
+
+        write_file_formatted "spec/examples.txt", ""
+        in_current_dir do
+          FileUtils.chmod 0000, "spec/examples.txt"
+        end
+      end
+
+
+      it 'emits a helpful warning to the user, and still runs the spec suite' do
+        run_command "spec/1_spec.rb"
+
+        expect(last_cmd_stderr).to include(
+          "WARNING: Could not read",
+          "spec/examples.txt",
+          "config.example_status_persistence_file_path",
+          "Errno:"
+        )
+        expect(last_cmd_stdout).to include("1 example")
+      end
+    end
+  end
 end
